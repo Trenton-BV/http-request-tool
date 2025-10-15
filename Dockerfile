@@ -17,6 +17,9 @@ COPY app/ .
 # Create static and templates directories if they don't exist
 RUN mkdir -p static templates
 
+# Create data directory with proper permissions
+RUN mkdir -p /data && chmod 777 /data
+
 # Expose the port the app runs on
 EXPOSE 8000
 

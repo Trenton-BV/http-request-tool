@@ -14,6 +14,8 @@ spec:
       labels:
         app: http-request-tool
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: http-request-tool
         image: ghcr.io/trenton-bv/http-request-tool:latest

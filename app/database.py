@@ -10,7 +10,26 @@ DB_DIR = os.path.dirname(DB_PATH)
 
 # Create directory if it doesn't exist
 if DB_DIR and not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR, exist_ok=True)
+    try:
+        os.makedirs(DB_DIR, mode=0o777, exist_ok=True)
+        print(f"Created database directory: {DB_DIR}")
+    except Exception as e:
+        print(f"Warning: Could not create directory {DB_DIR}: {e}")
+        # Fallback to current directory
+        DB_PATH = "history.db"
+        print(f"Using fallback database path: {DB_PATH}")
+
+# Test write permissions
+try:
+    test_file = os.path.join(DB_DIR if DB_DIR else ".", ".write_test")
+    with open(test_file, "w") as f:
+        f.write("test")
+    os.remove(test_file)
+    print(f"Database directory is writable: {DB_DIR if DB_DIR else '.'}")
+except Exception as e:
+    print(f"Warning: Database directory not writable: {e}")
+    DB_PATH = "history.db"
+    print(f"Using fallback database path: {DB_PATH}")
 
 DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
