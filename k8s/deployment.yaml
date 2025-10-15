@@ -16,14 +16,19 @@ spec:
     spec:
       containers:
       - name: http-request-tool
-        image: http-request-tool:latest
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/trenton-bv/http-request-tool:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
           name: http
         env:
         - name: PYTHONUNBUFFERED
           value: "1"
+        - name: DB_PATH
+          value: "/data/history.db"
+        volumeMounts:
+        - name: data
+          mountPath: /data
         resources:
           requests:
             memory: "128Mi"
@@ -43,3 +48,7 @@ spec:
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: http-request-tool-data

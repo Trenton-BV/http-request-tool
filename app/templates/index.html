@@ -12,8 +12,13 @@
     </style>
 </head>
 <body class="bg-gray-100 p-6">
-    <div class="max-w-4xl mx-auto">
-        <h1 class="text-2xl font-bold mb-6">HTTP Request Tool</h1>
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">HTTP Request Tool</h1>
+            <button onclick="toggleHistory()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+                <span id="history-toggle-text">Show History</span>
+            </button>
+        </div>
         
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <div class="flex flex-col space-y-4">
@@ -58,10 +63,11 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-xl font-semibold mb-4">Response</h2>
             <div class="mb-4">
                 <span id="status" class="font-mono px-2 py-1 rounded text-sm"></span>
+                <span id="duration" class="ml-4 text-sm text-gray-600"></span>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -72,6 +78,19 @@
                     <h3 class="font-semibold mb-2">Body</h3>
                     <pre id="response-body" class="bg-gray-100 p-2 rounded text-sm overflow-auto response-container"></pre>
                 </div>
+            </div>
+        </div>
+
+        <!-- History Panel -->
+        <div id="history-panel" class="hidden bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Request History</h2>
+                <button onclick="clearHistory()" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                    Clear All
+                </button>
+            </div>
+            <div id="history-list" class="space-y-2 max-h-96 overflow-y-auto">
+                <!-- History items will be loaded here -->
             </div>
         </div>
     </div>
@@ -151,10 +170,180 @@
                 } catch (e) {
                     document.getElementById('response-body').textContent = result.content;
                 }
+
+                // Reload history if visible
+                if (!document.getElementById('history-panel').classList.contains('hidden')) {
+                    loadHistory();
+                }
             } catch (error) {
                 document.getElementById('status').textContent = `Error: ${error.message}`;
                 document.getElementById('status').className = 'font-mono px-2 py-1 rounded text-sm bg-red-100';
                 document.getElementById('response-body').textContent = error.stack || error.message;
+            }
+        }
+
+        async function toggleHistory() {
+            const panel = document.getElementById('history-panel');
+            const toggleText = document.getElementById('history-toggle-text');
+            
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                toggleText.textContent = 'Hide History';
+                await loadHistory();
+            } else {
+                panel.classList.add('hidden');
+                toggleText.textContent = 'Show History';
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history?limit=50');
+                const data = await response.json();
+                
+                const historyList = document.getElementById('history-list');
+                historyList.innerHTML = '';
+                
+                if (data.items.length === 0) {
+                    historyList.innerHTML = '<p class="text-gray-500 text-center py-4">No history yet</p>';
+                    return;
+                }
+                
+                data.items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'border rounded p-3 hover:bg-gray-50 cursor-pointer';
+                    
+                    const statusColor = item.status_code >= 400 ? 'text-red-600' : 
+                                       item.status_code > 0 ? 'text-green-600' : 'text-gray-600';
+                    
+                    const timestamp = new Date(item.timestamp).toLocaleString();
+                    const duration = item.duration_ms ? `${item.duration_ms}ms` : '-';
+                    
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <span class="font-mono font-bold ${statusColor}">${item.method}</span>
+                                    <span class="text-sm text-gray-600">${timestamp}</span>
+                                    <span class="text-sm text-gray-500">${duration}</span>
+                                </div>
+                                <div class="text-sm text-gray-700 truncate">${item.url}</div>
+                                ${item.status_code ? `<span class="text-xs ${statusColor}">Status: ${item.status_code}</span>` : ''}
+                                ${item.error ? `<span class="text-xs text-red-600">Error: ${item.error}</span>` : ''}
+                            </div>
+                            <button onclick="deleteHistoryItem(${item.id}, event)" 
+                                    class="text-red-500 hover:text-red-700 ml-2">×</button>
+                        </div>
+                    `;
+                    
+                    div.onclick = (e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                            loadHistoryItem(item.id);
+                        }
+                    };
+                    
+                    historyList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+
+        async function loadHistoryItem(id) {
+            try {
+                const response = await fetch(`/api/history/${id}`);
+                const item = await response.json();
+                
+                // Load into form
+                document.getElementById('method').value = item.method;
+                document.getElementById('url').value = item.url;
+                
+                // Load headers
+                const headersDiv = document.getElementById('headers');
+                headersDiv.innerHTML = '';
+                if (item.headers) {
+                    const headers = JSON.parse(item.headers);
+                    Object.entries(headers).forEach(([key, value]) => {
+                        const headerDiv = document.createElement('div');
+                        headerDiv.className = 'flex space-x-2';
+                        headerDiv.innerHTML = `
+                            <input type="text" placeholder="Header" class="border rounded px-2 py-1 w-1/2" value="${key}">
+                            <input type="text" placeholder="Value" class="border rounded px-2 py-1 w-1/2" value="${value}">
+                            <button onclick="this.parentElement.remove()" class="text-red-500">×</button>
+                        `;
+                        headersDiv.appendChild(headerDiv);
+                    });
+                }
+                
+                // Load body
+                if (item.body) {
+                    try {
+                        const body = JSON.parse(item.body);
+                        document.getElementById('body').value = JSON.stringify(body, null, 2);
+                    } catch {
+                        document.getElementById('body').value = item.body;
+                    }
+                }
+                
+                // Load response
+                if (item.status_code) {
+                    const statusEl = document.getElementById('status');
+                    statusEl.textContent = `Status: ${item.status_code}`;
+                    statusEl.className = `font-mono px-2 py-1 rounded text-sm ${
+                        item.status_code >= 400 ? 'bg-red-100' : 'bg-green-100'
+                    }`;
+                    
+                    if (item.duration_ms) {
+                        document.getElementById('duration').textContent = `Duration: ${item.duration_ms}ms`;
+                    }
+                    
+                    if (item.response_headers) {
+                        document.getElementById('response-headers').textContent = 
+                            JSON.stringify(JSON.parse(item.response_headers), null, 2);
+                    }
+                    
+                    if (item.response_body) {
+                        try {
+                            document.getElementById('response-body').textContent = 
+                                JSON.stringify(JSON.parse(item.response_body), null, 2);
+                        } catch {
+                            document.getElementById('response-body').textContent = item.response_body;
+                        }
+                    }
+                }
+                
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (error) {
+                console.error('Failed to load history item:', error);
+            }
+        }
+
+        async function deleteHistoryItem(id, event) {
+            event.stopPropagation();
+            
+            if (!confirm('Delete this history item?')) {
+                return;
+            }
+            
+            try {
+                await fetch(`/api/history/${id}`, { method: 'DELETE' });
+                await loadHistory();
+            } catch (error) {
+                console.error('Failed to delete history item:', error);
+            }
+        }
+
+        async function clearHistory() {
+            if (!confirm('Clear all history? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                await fetch('/api/history', { method: 'DELETE' });
+                await loadHistory();
+            } catch (error) {
+                console.error('Failed to clear history:', error);
             }
         }
 

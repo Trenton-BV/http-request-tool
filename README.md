@@ -9,7 +9,11 @@ Een Python-gebaseerde HTTP request tool met FastAPI backend en web frontend. Per
 - ✅ JSON body support
 - ✅ Mooie web interface met Tailwind CSS
 - ✅ Response weergave met syntax highlighting
-- ✅ Docker en Kubernetes ready
+- ✅ **SQLite database voor request history**
+- ✅ **Configureerbaar storage pad voor persistent data**
+- ✅ **History browser met search en replay functionaliteit**
+- ✅ **Request duration tracking**
+- ✅ Docker en Kubernetes ready met persistent volumes
 
 ## Lokaal Draaien
 
@@ -30,25 +34,43 @@ pip install -r requirements.txt
 python main.py
 ```
 
-## Kubernetes Deployment
+## Configuratie
 
-### 1. Build de Docker image
+### Database Path
+
+Het pad waar de SQLite database wordt opgeslagen is configureerbaar via de `DB_PATH` environment variable:
+
+- **Default**: `/data/history.db`
+- **Docker Compose**: Gemount naar `./data/history.db` (lokale directory)
+- **Kubernetes**: Persistent Volume via PVC
 
 ```bash
-docker build -t http-request-tool:latest .
+# Custom pad instellen
+export DB_PATH=/custom/path/history.db
+```
+
+## Kubernetes Deployment
+
+### 1. Build de Docker image (optioneel - gebeurt automatisch via GitHub Actions)
+
+```bash
+docker build -t ghcr.io/trenton-bv/http-request-tool:latest .
 ```
 
 ### 2. Deploy naar Kubernetes
 
 ```bash
-# Alle manifests tegelijk deployen
+# Alle manifests tegelijk deployen (inclusief PVC)
 kubectl apply -f k8s/
 
 # Of individueel
+kubectl apply -f k8s/pvc.yaml
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/ingress.yaml
 ```
+
+**Let op**: De deployment gebruikt een PersistentVolumeClaim voor data persistentie. De history database blijft behouden bij pod restarts.
 
 ### 3. Controleer de deployment
 
@@ -83,6 +105,8 @@ Dan open: http://http-request-tool.local
 
 ## Gebruik
 
+### Request maken
+
 1. Open de web interface
 2. Selecteer HTTP method (GET, POST, etc.)
 3. Voer de URL in van de service die je wilt testen
@@ -91,7 +115,22 @@ Dan open: http://http-request-tool.local
 4. Voeg optioneel headers toe (JSON format)
 5. Voeg optioneel een body toe (JSON format) voor POST/PUT/PATCH
 6. Klik op "Send" of druk Ctrl+Enter
-7. Bekijk de response
+7. Bekijk de response met status code, headers, body en duration
+
+### History gebruiken
+
+1. Klik op "Show History" om alle vorige requests te zien
+2. Klik op een history item om het te laden in het formulier
+3. Pas aan indien nodig en verstuur opnieuw
+4. Verwijder individuele items met de × knop
+5. Clear alle history met "Clear All"
+
+Alle requests worden automatisch opgeslagen in de SQLite database met:
+- Timestamp
+- Method, URL, headers en body
+- Response status, headers en body
+- Request duration in milliseconds
+- Error messages (indien van toepassing)
 
 ## Voorbeelden
 

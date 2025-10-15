@@ -13,6 +13,8 @@ docker compose logs -f
 open http://localhost:8080
 ```
 
+**Data persistentie**: De history database wordt opgeslagen in `./data/history.db` en blijft behouden tussen container restarts.
+
 ## Kubernetes Deployment
 
 ### Optie 1: Automatisch (aanbevolen)
