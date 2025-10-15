@@ -182,6 +182,41 @@ docker compose logs -f
 kubectl logs -l app=http-request-tool
 ```
 
+### 403 Forbidden of Permission Denied errors
+
+**Probleem**: Database kan niet schrijven naar `/data` directory.
+
+**Oplossing**:
+1. Check of de mounted volume write permissions heeft
+2. In Kubernetes: zorg dat de PVC de juiste permissions heeft
+3. Check de logs voor "Database directory not writable" warnings
+
+```bash
+# Check pod logs
+kubectl logs -l app=http-request-tool | grep -i "database\|permission"
+
+# Check PVC permissions
+kubectl exec -it <pod-name> -- ls -la /data
+```
+
+De applicatie heeft een fallback naar `./history.db` als `/data` niet writable is.
+
+### Image Pull errors (403) in Kubernetes
+
+**Probleem**: Kan private image niet pullen van ghcr.io.
+
+**Oplossing**: Create een image pull secret:
+
+```bash
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<GITHUB_TOKEN> \
+  --docker-email=<YOUR_EMAIL>
+```
+
+Zie `k8s/imagepullsecret-example.yaml` voor meer details.
+
 ### Kan andere services niet bereiken in K8s
 Zorg ervoor dat:
 - De service naam correct is
