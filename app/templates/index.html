@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Request Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .response-container {
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-2xl font-bold mb-6">HTTP Request Tool</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-col space-y-4">
+                <div class="flex items-center space-x-4">
+                    <select id="method" class="border rounded px-3 py-2 w-32">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="HEAD">HEAD</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                    </select>
+                    <input type="text" id="url" placeholder="Enter URL" class="border rounded px-3 py-2 flex-1" 
+                           value="http://">
+                    <button onclick="sendRequest()" 
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Send
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="font-semibold mb-2">Headers</h3>
+                        <div id="headers" class="space-y-2">
+                            <div class="flex space-x-2">
+                                <input type="text" placeholder="Header" class="border rounded px-2 py-1 w-1/2" value="Content-Type">
+                                <input type="text" placeholder="Value" class="border rounded px-2 py-1 w-1/2" value="application/json">
+                            </div>
+                        </div>
+                        <button onclick="addHeader()" class="mt-2 text-sm text-blue-500">+ Add Header</button>
+                    </div>
+
+                    <div>
+                        <h3 class="font-semibold mb-2">Body</h3>
+                        <textarea id="body" class="w-full h-40 border rounded p-2 font-mono text-sm" 
+                                placeholder='{"key": "value"}'>{
+    "key": "value"
+}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Response</h2>
+            <div class="mb-4">
+                <span id="status" class="font-mono px-2 py-1 rounded text-sm"></span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="font-semibold mb-2">Headers</h3>
+                    <pre id="response-headers" class="bg-gray-100 p-2 rounded text-sm overflow-auto response-container"></pre>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">Body</h3>
+                    <pre id="response-body" class="bg-gray-100 p-2 rounded text-sm overflow-auto response-container"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addHeader() {
+            const headersDiv = document.getElementById('headers');
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'flex space-x-2';
+            headerDiv.innerHTML = `
+                <input type="text" placeholder="Header" class="border rounded px-2 py-1 w-1/2">
+                <input type="text" placeholder="Value" class="border rounded px-2 py-1 w-1/2">
+                <button onclick="this.parentElement.remove()" class="text-red-500">×</button>
+            `;
+            headersDiv.appendChild(headerDiv);
+        }
+
+        function getHeaders() {
+            const headers = {};
+            document.querySelectorAll('#headers > div').forEach(headerDiv => {
+                const inputs = headerDiv.querySelectorAll('input');
+                if (inputs[0].value && inputs[1].value) {
+                    headers[inputs[0].value] = inputs[1].value;
+                }
+            });
+            return headers;
+        }
+
+        function getBody() {
+            try {
+                return JSON.parse(document.getElementById('body').value);
+            } catch (e) {
+                return document.getElementById('body').value;
+            }
+        }
+
+        async function sendRequest() {
+            const method = document.getElementById('method').value;
+            let url = document.getElementById('url').value;
+            const headers = getHeaders();
+            const body = getBody();
+
+            document.getElementById('status').textContent = 'Sending request...';
+            document.getElementById('status').className = 'font-mono px-2 py-1 rounded text-sm bg-yellow-100';
+
+            try {
+                const response = await fetch('/api/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        method,
+                        url,
+                        headers,
+                        body: method !== 'GET' ? body : undefined
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Update status
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = `Status: ${result.status_code}`;
+                statusEl.className = `font-mono px-2 py-1 rounded text-sm ${
+                    result.status_code >= 400 ? 'bg-red-100' : 'bg-green-100'
+                }`;
+
+                // Update response headers
+                document.getElementById('response-headers').textContent = 
+                    JSON.stringify(result.headers, null, 2);
+                
+                // Try to pretty print JSON if possible
+                try {
+                    document.getElementById('response-body').textContent = 
+                        JSON.stringify(JSON.parse(result.content), null, 2);
+                } catch (e) {
+                    document.getElementById('response-body').textContent = result.content;
+                }
+            } catch (error) {
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+                document.getElementById('status').className = 'font-mono px-2 py-1 rounded text-sm bg-red-100';
+                document.getElementById('response-body').textContent = error.stack || error.message;
+            }
+        }
+
+        // Add keyboard shortcut (Ctrl+Enter to send request)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                sendRequest();
+            }
+        });
+    </script>
+</body>
+</html>
